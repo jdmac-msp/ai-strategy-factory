@@ -31,12 +31,34 @@ from ..substrate import Substrate, Brand, from_state
 # ─────────────────────────────────────────────────────────────────────────────
 # markdown + mermaid helpers (shared by all views)
 # ─────────────────────────────────────────────────────────────────────────────
+# Gemini tags diagrams inconsistently (```mermaid, ```flowchart, or a bare ```),
+# so detect by CONTENT. But require a CLEAN diagram header on the first line —
+# else prose like "Timeline Visual:" false-positives into an UnknownDiagramError.
+_MERMAID_HEADER = re.compile(
+    r"^(?:"
+    r"(?:flowchart|graph)\s+(?:TB|TD|BT|RL|LR)"
+    r"|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram"
+    r"|gantt|journey|pie(?:\s+title\b.*)?|mindmap|timeline|quadrantChart|gitGraph|requirementDiagram"
+    r")\s*;?\s*$",
+    re.I,
+)
+
+def _looks_like_mermaid(code: str) -> bool:
+    first = next((ln.strip() for ln in code.splitlines() if ln.strip()), "")
+    return bool(_MERMAID_HEADER.match(first))
+
 def _md(md_text: str) -> str:
-    """Markdown → HTML, with ```mermaid blocks pulled to client-side render targets."""
+    """Markdown → HTML. Any fenced block that *is* a mermaid diagram (by content,
+    whatever the fence tag) becomes a client-side render target; other code blocks
+    are left alone."""
     blocks = []
     def grab(m):
-        blocks.append(m.group(1).strip()); return f"\n@@MMD{len(blocks)-1}@@\n"
-    md_text = re.sub(r"```mermaid\s*\n(.*?)```", grab, md_text, flags=re.S)
+        lang, code = (m.group(1) or "").strip().lower(), m.group(2)
+        if lang == "mermaid" or _looks_like_mermaid(code):
+            blocks.append(code.strip())
+            return f"\n@@MMD{len(blocks)-1}@@\n"
+        return m.group(0)  # not a diagram — leave the code block intact
+    md_text = re.sub(r"```([a-zA-Z0-9_-]*)[ \t]*\n(.*?)```", grab, md_text, flags=re.S)
     md_text = re.sub(r"^#\s+.*\n", "", md_text, count=1)   # drop the section's own H1
     body = markdown.markdown(md_text, extensions=["tables", "fenced_code", "sane_lists"])
     for i, code in enumerate(blocks):
