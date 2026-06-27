@@ -1,0 +1,28 @@
+name: entity-gate-gauntlet
+
+# L4 closer: the entity-resolution gate's behavior is a CI invariant.
+# Any change to resolve_entity that breaks a contract case fails the build.
+# (Real-data from_state cases skip gracefully when the run dirs are absent.)
+
+on:
+  push:
+    paths:
+      - 'strategy_factory/substrate.py'
+      - 'tests/gauntlet_entity_gate.py'
+      - '.github/workflows/gauntlet.yml'
+  pull_request:
+    paths:
+      - 'strategy_factory/substrate.py'
+      - 'tests/gauntlet_entity_gate.py'
+
+jobs:
+  gauntlet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install "pydantic>=2.0.0"
+      - name: Run entity-gate gauntlet
+        run: python tests/gauntlet_entity_gate.py

@@ -12,6 +12,10 @@ AI Strategy Factory generates comprehensive AI strategy deliverables for any com
 - 2 Word documents
 - Architecture diagrams (Mermaid → PNG)
 
+## Research grounding (entity gate) — NON-NEGOTIABLE
+
+Research output MUST pass the entity-resolution gate (`strategy_factory/substrate.py::resolve_entity`) **before** synthesis, with the **seed URL as a first-class input** — a URL smuggled via `--context` disables the gate's domain check (this is why contamination reached live runs). The gate catches **same-name collision only**; it is NOT the cross-source claim filter (see `SEAM-HANDOFF-grounding-gaps.md` GAP 2 — a correct-identity run can still be contaminated). Any change to `resolve_entity` must keep `tests/gauntlet_entity_gate.py` green (CI-enforced via `.github/workflows/gauntlet.yml`).
+
 ## Quick Commands
 
 ### Setup (First Time)
