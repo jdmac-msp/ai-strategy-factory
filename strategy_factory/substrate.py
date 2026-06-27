@@ -84,7 +84,9 @@ class Section(BaseModel):
     order: int = 0
     kicker: str = ""                     # short mono label (e.g. "ASSESSMENT")
     title: str = ""
-    body_md: str = ""                    # markdown body (tables live inline)
+    body_md: str = ""                    # markdown body (tables live inline) — source of truth
+    body_html: Optional[str] = None      # pre-rendered html (populated by the generation layer
+                                         # so the React renderer stays dependency-free)
     severity: Optional[str] = None       # for findings: high|med|low|positive
 
 

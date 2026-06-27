@@ -319,6 +319,8 @@ if __name__ == "__main__":
     out.write_text(render(sub, view, sub.brand), encoding="utf-8")
     print(f"Wrote {out}  ({len(out.read_text(encoding='utf-8'))//1024} KB, view={view})")
     # Bridge to the React/Reveal renderer: same Substrate contract as JSON.
+    for s in sub.sections:               # enrich with pre-rendered html (dep-free React)
+        s.body_html = _md(s.body_md)
     json_out = pathlib.Path(run_dir) / "substrate.json"
     json_out.write_text(sub.model_dump_json(indent=2), encoding="utf-8")
     print(f"Wrote {json_out}  (Substrate JSON — React-renderer bridge)")
