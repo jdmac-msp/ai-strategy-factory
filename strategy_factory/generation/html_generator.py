@@ -49,6 +49,30 @@ def _esc(s: str) -> str:
     return html.escape(s or "")
 
 
+def _plain(md_text: str, limit: int = 240) -> str:
+    """Strip markdown to plain text (kills '## ' / '**' bleed-through)."""
+    t = md_text or ""
+    t = re.sub(r"`+", "", t)
+    t = re.sub(r"^\s*#{1,6}\s*", "", t, flags=re.M)
+    t = re.sub(r"\*\*|\*|__|_", "", t)
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t[:limit].rstrip() + ("…" if len(t) > limit else "")
+
+
+def _clean_subtitle(sub: Substrate) -> str:
+    """A correct, clean cover subtitle. Prefer SYNTHESIS (section 01's first
+    paragraph) over the raw research profile, which the entity gate may have
+    flagged as wrong-entity (e.g. Steve's polluted 1990-UK-company blurb)."""
+    if sub.sections:
+        body = sorted(sub.sections, key=lambda s: s.order)[0].body_md
+        for para in re.split(r"\n\s*\n", body):
+            p = para.strip()
+            if p and not p.startswith("#") and not p.startswith("|") and len(p) > 60:
+                return _plain(p, 240)
+    return _plain(sub.profile_summary, 240)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # View D — "traditional" (plain, elegant, full depth)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,8 +84,10 @@ def render_traditional(sub: Substrate, brand: Optional[Brand] = None) -> str:
     accent2 = b.accent_2 or "#2D7A4F"
     name = b.name or sub.meta.subject_name
     title = b.title or ""
-    logo = (f'<img class="logo-img" src="{_esc(b.logo_url)}" alt="logo">'
-            if b.logo_url else f'<span class="logo-wm">{_esc(name)}</span>')
+    producer = b.producer_name or "ASAP AI"
+    # LEFT corner = the firm PRODUCING the report (FROM); the target goes on the right.
+    logo = (f'<img class="logo-img" src="{_esc(b.producer_logo_url)}" alt="logo">'
+            if b.producer_logo_url else f'<span class="logo-wm">{_esc(producer)}</span>')
     report_title = {
         "ai_strategy": "AI Strategy Blueprint",
         "intelligence_brief": "Expert Intelligence Brief",
@@ -112,7 +138,7 @@ def render_traditional(sub: Substrate, brand: Optional[Brand] = None) -> str:
         subject=_esc(meta.subject_name),
         prepared_date=_esc(meta.generated_at[:10] or "2026"),
         mode=_esc(meta.mode or "—"),
-        subtitle=_esc(sub.profile_summary[:240]),
+        subtitle=_esc(_clean_subtitle(sub)),
         gate_banner=gate_banner, toc="\n".join(toc),
         sections="\n".join(sections), cites=cites,
         n_sections=len(sub.sections),
@@ -146,6 +172,7 @@ TRADITIONAL_TMPL = r"""<!DOCTYPE html>
   .logo-img{{height:26px;width:auto;display:block}}
   .logo-wm{{font-family:var(--head);font-size:19px;letter-spacing:.04em;color:var(--cream)}}
   .nt{{display:flex;flex-direction:column;line-height:1.15;padding-left:14px;border-left:1px solid rgba(255,255,255,.25)}}
+  .nt .pf{{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:2px}}
   .nt .n{{font-family:var(--head);font-size:18px;letter-spacing:.03em;color:#fff}}
   .nt .n b{{color:var(--accent)}}
   .nt .t{{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.7)}}
@@ -201,7 +228,7 @@ TRADITIONAL_TMPL = r"""<!DOCTYPE html>
 <body>
   <div class="bar">
     <div class="who">{logo}
-      <div class="nt"><span class="n"><b>{name}</b></span><span class="t">{title}</span></div>
+      <div class="nt"><span class="pf">Prepared for</span><span class="n"><b>{name}</b></span><span class="t">{title}</span></div>
     </div>
     <span class="badge">Confidential · {report_title}</span>
   </div>

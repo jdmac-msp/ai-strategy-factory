@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Floor Test — ai-strategy-factory × Steve Cunningham</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --panel-2:#1b212b; --ink:#e8ecf2; --muted:#9aa6b6;
+    --line:#252c38; --accent:#6ea8fe; --accent-2:#8b7bf0;
+    --green:#3ecf8e; --green-bg:#11241c; --amber:#f5b94d; --amber-bg:#2a2110; --red:#ff6b6b; --red-bg:#2a1414;
+    --slate:#7d8aa0; --slate-bg:#1a1f29;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    font-size:15px;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:960px;margin:0 auto;padding:0 22px 80px}
+
+  /* Header */
+  header{background:linear-gradient(135deg,#12161d 0%,#1a2130 60%,#1d1830 100%);
+    border-bottom:1px solid var(--line);padding:46px 0 38px;margin-bottom:34px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  h1{margin:0 0 6px;font-size:30px;line-height:1.18;letter-spacing:-.01em}
+  h1 .sub{color:var(--muted);font-weight:500}
+  .target-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:16px;font-size:13.5px;color:var(--muted)}
+  .target-row a{font-weight:600}
+  .verdict{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:10px 18px;
+    background:var(--green-bg);border:1px solid #1d5a40;border-radius:999px;font-weight:700;font-size:15px;color:var(--green)}
+  .verdict .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(62,207,142,.18)}
+  .verdict .tail{color:var(--muted);font-weight:500}
+
+  /* Stat strip */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 36px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px}
+  .stat .n{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .stat .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px;font-family:var(--mono)}
+  .stat .n.ok{color:var(--green)} .stat .n.warn{color:var(--amber)}
+
+  section{margin:0 0 34px}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:0 0 14px}
+  .good-list{display:grid;gap:11px}
+  .good-list .row{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:14px 16px}
+  .good-list .check{color:var(--green);font-weight:800;flex:none;margin-top:1px}
+  .good-list b{color:var(--ink)}
+
+  /* Defect cards */
+  .defect{border-radius:12px;padding:18px 20px;margin:0 0 16px;border:1px solid var(--line);background:var(--panel)}
+  .defect.high{border-left:4px solid var(--red)}
+  .defect.med{border-left:4px solid var(--amber)}
+  .defect.low{border-left:4px solid var(--slate)}
+  .defect .head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+  .sev{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    padding:4px 9px;border-radius:6px}
+  .sev.high{color:var(--red);background:var(--red-bg)}
+  .sev.med{color:var(--amber);background:var(--amber-bg)}
+  .sev.low{color:var(--slate);background:var(--slate-bg)}
+  .defect .title{font-weight:700;font-size:16px}
+  .defect p{margin:9px 0;color:#cdd5e0}
+  .defect p:last-child{margin-bottom:0}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:5px;padding:1.5px 6px;color:#dfe6ef}
+  .quote{border-left:2px solid var(--line);padding:6px 0 6px 14px;margin:10px 0;color:var(--muted);font-style:italic}
+  .quote b{color:var(--amber);font-style:normal}
+
+  /* Next actions */
+  ol.actions{list-style:none;counter-reset:a;margin:0;padding:0;display:grid;gap:12px}
+  ol.actions li{counter-increment:a;position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:15px 18px 15px 56px}
+  ol.actions li::before{content:counter(a);position:absolute;left:16px;top:14px;width:26px;height:26px;
+    display:grid;place-items:center;border-radius:50%;background:var(--accent);color:#0b0e13;font-weight:800;font-size:13px}
+  ol.actions li b{color:var(--ink)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 8px;border-radius:5px;margin-left:8px;background:var(--green-bg);color:var(--green);border:1px solid #1d5a40}
+
+  /* Artifacts */
+  .arts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .artcol{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .artcol h3{margin:0 0 12px;font-size:13px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .artlist{display:grid;gap:7px}
+  .artlist a{display:flex;justify-content:space-between;gap:10px;padding:8px 11px;border:1px solid var(--line);
+    border-radius:8px;background:var(--panel-2);font-size:13px}
+  .artlist a:hover{border-color:var(--accent);text-decoration:none}
+  .artlist a .meta{color:var(--muted);font-family:var(--mono);font-size:11px;flex:none}
+  .md-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .md-grid a{display:block;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);
+    font-family:var(--mono);font-size:11.5px}
+  .md-grid a:hover{border-color:var(--accent);text-decoration:none}
+
+  footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-family:var(--mono)}
+
+  @media(max-width:720px){
+    .stats{grid-template-columns:1fr 1fr}
+    .arts{grid-template-columns:1fr}
+    .md-grid{grid-template-columns:1fr}
+    h1{font-size:24px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Floor Test · Rig Qualification · 2026-06-27</p>
+    <h1>ai-strategy-factory <span class="sub">×</span> Steve Cunningham</h1>
+    <div class="target-row">
+      <span>Repo: <a href="https://github.com/promptadvisers/ai-strategy-factory" target="_blank" rel="noopener">promptadvisers/ai-strategy-factory ↗</a></span>
+      <span>·</span>
+      <span>Target: <a href="https://stevecunningham.ai/" target="_blank" rel="noopener">stevecunningham.ai ↗</a></span>
+      <span>·</span>
+      <span>Mode: <code>quick</code></span>
+    </div>
+    <div class="verdict">
+      <span class="dot"></span> VERDICT: PASS
+      <span class="tail">— rig clears the floor, with 3 ranked defects</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="stats">
+    <div class="stat"><div class="n ok">$0.0416</div><div class="l">Total cost</div></div>
+    <div class="stat"><div class="n warn">17 / 19</div><div class="l">Deliverables</div></div>
+    <div class="stat"><div class="n">~10 min</div><div class="l">Wall clock</div></div>
+    <div class="stat"><div class="n ok">exit 0</div><div class="l">Pipeline</div></div>
+  </div>
+
+  <section>
+    <h2>The one-line read</h2>
+    <div class="card">
+      The factory ran end-to-end on a cold Windows box and produced genuinely usable strategy content
+      for <strong>$0.04</strong>. The output quality is real — but the run surfaced a defect that matters
+      more than the two visible ones: <strong>the research phase resolved the wrong entity</strong>, and the
+      deliverables only stayed on-target because the <code>--context</code> string steered synthesis past the
+      polluted research. The factory does not verify identity, and it <em>fails open</em>.
+    </div>
+  </section>
+
+  <section>
+    <h2>What worked</h2>
+    <div class="good-list">
+      <div class="row"><span class="check">✓</span><div><b>Setup → run is clean.</b> Clone, venv, dependencies, both API keys, and live auth pings (Gemini + Perplexity) all green on first try. Zero setup friction.</div></div>
+      <div class="row"><span class="check">✓</span><div><b>15 markdown deliverables</b> — substantive (4.5–30&nbsp;KB each) and on-target. Correctly internalized Steve's real positioning (<em>Humans+Agents Economy</em>, thought-leadership consulting), with realistic ROI tables and proper SOW framing.</div></div>
+      <div class="row"><span class="check">✓</span><div><b>2 Word documents</b> — <code>final_strategy_report.docx</code> (137&nbsp;KB) + <code>statement_of_work.docx</code> (39&nbsp;KB), well-formed and openable.</div></div>
+      <div class="row"><span class="check">✓</span><div><b>Research phase economics</b> — 9 Perplexity queries, info tier <code>public_medium</code>, $0.0135. Synthesis $0.0281. Cheap enough to run liberally.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Defects — ranked by threat to output trust</h2>
+
+    <div class="defect high">
+      <div class="head"><span class="sev high">High</span><span class="title">Research grabbed the wrong entity (silent)</span></div>
+      <p>The research phase populated the company profile from a <strong>UK Companies House record for an unrelated 1990 company</strong>, not the AI advisor at stevecunningham.ai:</p>
+      <p class="quote">profile.description → <b>"Steve Cunningham &amp; Associates Limited was set up on Monday the 11th of June 1990…"</b></p>
+      <p class="quote">primary_industry → <b>"Forrester: Global Technology Spend Will Grow By 7."</b> &nbsp;(a snippet headline, not an industry) · company_name → <code>None</code></p>
+      <p>The output only stayed correct because the <code>--context</code> argument overrode the polluted profile during Gemini synthesis. Without a strong context string, this run would have produced a confident strategy for the <em>wrong company</em>. <strong>This is the real floor risk.</strong></p>
+    </div>
+
+    <div class="defect med">
+      <div class="head"><span class="sev med">Med</span><span class="title">PPTX decks: 0/2, and the failure is swallowed</span></div>
+      <p>Both decks (<code>executive_summary</code>, <code>full_findings</code>) sit at <code>status=pending</code>. The orchestrator wraps generation in <code>try/except _record_error</code>, but <code>state.errors</code> persisted as <code>[]</code> — the exception text is lost. The whole generation phase ran in <strong>2.7&nbsp;s</strong>, too fast to have built decks.</p>
+      <p>Tracing the code path: the deck generator is tightly coupled to live pydantic objects (<code>research.industry.primary_industry</code>, <code>synthesis.deliverables</code>), and the exact in-run throw isn't recoverable from artifacts because <code>synthesis_output</code> isn't persisted to state. <strong>PPTX is broken on this build, and the error handling hides why.</strong></p>
+    </div>
+
+    <div class="defect low">
+      <div class="head"><span class="sev low">Low · env</span><span class="title">Mermaid PNGs are placeholders</span></div>
+      <p>All 4 <code>.png</code> files are byte-identical 5586-byte fallbacks. The <code>.mmd</code> source is real and good; rendering needs the mermaid CLI — <code>npm i -g @mermaid-js/mermaid-cli</code> (<code>mmdc</code>) — which isn't on this box. Pure dependency gap, not a code bug.</p>
+      <p>Also flagged: <code>google.generativeai</code> is deprecated upstream (Google wants <code>google.genai</code>). Works today, future-fragile.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Recommended next actions</h2>
+    <ol class="actions">
+      <li><b>Entity-resolution guard</b> in the research phase — verify the resolved profile matches the seed URL/domain before synthesis; fail loud on mismatch. <span class="pill">highest leverage</span><br><span style="color:var(--muted)">Protects every downstream deliverable. The root cause of defect #1.</span></li>
+      <li><b>Stop swallowing the PPTX exception</b> — persist it to <code>state.errors</code> so the failure is debuggable, then fix the deck generator. <span class="pill">quick win</span><br><span style="color:var(--muted)">The only thing standing between this and a complete 19/19.</span></li>
+      <li><b>Install <code>mmdc</code></b> to light up the 4 diagrams — or swap to a Python-native mermaid renderer to drop the Node dependency entirely.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Artifacts &amp; links</h2>
+    <div class="arts">
+      <div class="artcol">
+        <h3>Generated output (on disk)</h3>
+        <div class="artlist">
+          <a href="output/steve-cunningham/" >📁 output/steve-cunningham/ <span class="meta">folder</span></a>
+          <a href="output/steve-cunningham/documents/final_strategy_report.docx">📄 final_strategy_report.docx <span class="meta">137 KB</span></a>
+          <a href="output/steve-cunningham/documents/statement_of_work.docx">📄 statement_of_work.docx <span class="meta">39 KB</span></a>
+          <a href="floortest-run.log">🧾 floortest-run.log <span class="meta">full log</span></a>
+          <a href="output/steve-cunningham/state.json">⚙️ state.json <span class="meta">194 KB</span></a>
+        </div>
+        <h3 style="margin-top:16px">External</h3>
+        <div class="artlist">
+          <a href="https://github.com/promptadvisers/ai-strategy-factory" target="_blank" rel="noopener">⌥ GitHub repo <span class="meta">↗</span></a>
+          <a href="https://stevecunningham.ai/" target="_blank" rel="noopener">⌥ stevecunningham.ai <span class="meta">↗</span></a>
+        </div>
+      </div>
+      <div class="artcol">
+        <h3>15 markdown deliverables</h3>
+        <div class="md-grid">
+          <a href="output/steve-cunningham/markdown/01_tech_inventory.md">01 · tech inventory</a>
+          <a href="output/steve-cunningham/markdown/02_pain_points.md">02 · pain points</a>
+          <a href="output/steve-cunningham/markdown/03_mermaid_diagrams.md">03 · mermaid diagrams</a>
+          <a href="output/steve-cunningham/markdown/04_maturity_assessment.md">04 · maturity</a>
+          <a href="output/steve-cunningham/markdown/05_roadmap.md">05 · roadmap</a>
+          <a href="output/steve-cunningham/markdown/06_quick_wins.md">06 · quick wins</a>
+          <a href="output/steve-cunningham/markdown/07_vendor_comparison.md">07 · vendors</a>
+          <a href="output/steve-cunningham/markdown/08_license_consolidation.md">08 · licenses</a>
+          <a href="output/steve-cunningham/markdown/09_roi_calculator.md">09 · ROI</a>
+          <a href="output/steve-cunningham/markdown/10_ai_policy.md">10 · AI policy</a>
+          <a href="output/steve-cunningham/markdown/11_data_governance.md">11 · data gov</a>
+          <a href="output/steve-cunningham/markdown/12_prompt_library.md">12 · prompts</a>
+          <a href="output/steve-cunningham/markdown/13_glossary.md">13 · glossary</a>
+          <a href="output/steve-cunningham/markdown/14_use_case_library.md">14 · use cases</a>
+          <a href="output/steve-cunningham/markdown/15_change_management.md">15 · change mgmt</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Floor test executed on Windows 10 · Python 3.12 · 2026-06-27</span>
+    <span>Perplexity sonar + Gemini 2.5-flash · $0.0416</span>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -55,12 +55,14 @@ class MatchStatus(str, Enum):
 # ─────────────────────────────────────────────────────────────────────────────
 class Brand(BaseModel):
     """Per-client override layer (L5). One-token reskin on the house system."""
-    name: str = ""                       # sticky highlighted subject name
+    name: str = ""                       # sticky highlighted subject name (PREPARED FOR)
     title: str = ""                      # sticky highlighted subject title/role
     accent: Optional[str] = None         # replaces the house signature color
     accent_2: Optional[str] = None
-    logo_url: Optional[str] = None       # embedded client logo
+    logo_url: Optional[str] = None       # embedded client logo (right/PREPARED-FOR side)
     seed_url: Optional[str] = None       # the canonical source-of-truth URL
+    producer_name: str = "ASAP AI"       # the firm PRODUCING the report (left corner / FROM)
+    producer_logo_url: Optional[str] = None
 
 
 class EntityResolution(BaseModel):
