@@ -30,7 +30,7 @@ from markdown.extensions.tables import TableExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.toc import TocExtension
 
-from strategy_factory.config import OUTPUT_DIR, DELIVERABLES
+from strategy_factory.config import OUTPUT_DIR, DELIVERABLES, PROJECT_ROOT
 from strategy_factory.models import CompanyInput, ResearchMode
 from strategy_factory.progress_tracker import ProgressTracker, slugify
 
@@ -717,6 +717,12 @@ HOME_CONTENT = """
                 Start Analysis
             </button>
         </form>
+
+        <p style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-top: 1.25rem;">
+            Are you an AI agent? See
+            <a href="/pricing.md" style="color: var(--primary);">machine-readable pricing</a>
+            (<a href="/pricing.txt" style="color: var(--primary);">plain text</a>).
+        </p>
     </div>
 
     {% if companies %}
@@ -924,6 +930,32 @@ def home():
         title="Home",
         content=content,
         scripts=HOME_SCRIPTS
+    )
+
+
+@app.route('/pricing.md')
+def pricing_markdown():
+    """Machine-readable pricing for AI agents (Markdown)."""
+    pricing_path = PROJECT_ROOT / "pricing.md"
+    if not pricing_path.exists():
+        return jsonify({"error": "Pricing file not found"}), 404
+    return Response(
+        pricing_path.read_text(encoding="utf-8"),
+        mimetype="text/markdown",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.route('/pricing.txt')
+def pricing_text():
+    """Machine-readable pricing for AI agents (plain text)."""
+    pricing_path = PROJECT_ROOT / "pricing.txt"
+    if not pricing_path.exists():
+        return jsonify({"error": "Pricing file not found"}), 404
+    return Response(
+        pricing_path.read_text(encoding="utf-8"),
+        mimetype="text/plain",
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 

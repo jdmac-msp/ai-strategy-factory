@@ -478,6 +478,18 @@ ai-strategy-factory/
 - Quick mode: **$0.02-0.05** per company
 - Comprehensive mode: **$0.30-0.80** per company
 
+### Machine-Readable Pricing (for AI agents)
+
+Pricing is also published in an agent-friendly format so AI shopping agents can read
+it in one pass:
+
+- [`pricing.md`](pricing.md) — structured Markdown (plans, per-analysis cost, consulting tiers, FAQ)
+- [`pricing.txt`](pricing.txt) — plain-text copy
+
+When the web app is running, these are served at `http://localhost:8888/pricing.md`
+and `http://localhost:8888/pricing.txt`, and the home page links to them with an
+"Are you an AI agent?" prompt.
+
 ---
 
 ## Troubleshooting

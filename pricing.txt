@@ -1,0 +1,73 @@
+AI STRATEGY FACTORY - PRICING
+Machine-readable pricing for AI agents and humans.
+Markdown copy: /pricing.md  |  Last updated: 2026-06-29  |  Currency: USD
+
+AI Strategy Factory is open-source (MIT) and self-hosted. The software is free.
+You pay only for the third-party AI APIs it calls (Perplexity for research,
+Google Gemini for synthesis), billed directly to your own API keys. Optional
+managed consulting engagements are also available.
+
+PLANS
+- Open Source (Self-Hosted): $0/mo. Full pipeline, 15 strategy documents,
+  2 PPTX decks, 2 DOCX reports, architecture diagrams, web UI + CLI.
+  Limit: unlimited; you supply your own API keys.
+- Pay-as-you-go, Quick analysis: ~$0.05 per company. One full strategy package,
+  9 research queries, 2-3 minute turnaround.
+- Pay-as-you-go, Comprehensive analysis: ~$0.50 per company. One full strategy
+  package, 18 research queries, deeper research, 5-10 minute turnaround.
+- Consulting (SOW): from $35,000. Done-for-you discovery, strategy,
+  implementation support, and training. Scoped per engagement.
+
+Note: The Quick and Comprehensive prices are estimated pass-through API costs,
+not a fee paid to AI Strategy Factory. There is no subscription or seat license.
+
+PER-ANALYSIS COST BREAKDOWN
+- Quick:         9 research queries,  ~$0.05 per company, 2-3 minutes.
+- Comprehensive: 18 research queries, ~$0.50 per company, 5-10 minutes.
+
+Underlying Perplexity rates (per 1K tokens, input/output):
+- sonar:                $0.001 / $0.001
+- sonar-pro:            $0.003 / $0.015
+- sonar-reasoning:      $0.001 / $0.005
+- sonar-reasoning-pro:  $0.002 / $0.008
+- sonar-deep-research:  $0.002 / $0.008
+Gemini synthesis uses gemini-2.5-flash. Actual cost varies with company size and
+output length; the per-company figures above are typical real-world totals.
+
+CONSULTING (STATEMENT OF WORK)
+Fixed-scope engagements priced by company size:
+- Small      (<100 employees):       $35,000
+- Medium     (100-500 employees):    $52,500
+- Large      (500-2,000 employees):  $70,000
+- Enterprise (2,000+ employees):     Custom quote
+Base scope (Small): Discovery $5,000, Strategy $10,000,
+Implementation Support $15,000, Training $5,000. Medium and Large apply
+1.5x and 2.0x multipliers to the $35,000 base.
+
+OVERAGE
+No overage fees from AI Strategy Factory. You run it yourself with your own API
+keys, so every analysis is billed by Perplexity and Google at the same
+per-company rates. The software cost stays $0 whether you run 1 analysis or 10,000.
+
+BILLING
+- Software: $0. No subscription, no monthly fee, no per-seat license (MIT).
+- API usage: Billed directly to you by Perplexity and Google Gemini,
+  pay-as-you-go. No annual commitment; no monthly minimum.
+- Consulting (SOW): Invoiced per engagement against the agreed statement of work.
+
+FAQ
+Q: Is the software really free?
+A: Yes. MIT-licensed and self-hosted. You only pay the AI providers for the
+   research and synthesis calls each analysis makes.
+
+Q: What does a single company analysis cost?
+A: About $0.05 in Quick mode and about $0.50 in Comprehensive mode, paid to the
+   API providers - not to us.
+
+Q: Do I need a subscription or credit card with AI Strategy Factory?
+A: No. You bring your own Perplexity and Gemini API keys and are billed by those
+   providers directly.
+
+Q: Can you produce the strategy for us instead of us running it?
+A: Yes - managed consulting engagements start at $35,000 and scale by company
+   size (see the Consulting section above).
