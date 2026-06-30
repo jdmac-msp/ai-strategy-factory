@@ -22,6 +22,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from dataclasses import asdict
+
 from flask import Flask, render_template_string, request, jsonify, Response, send_from_directory
 from dotenv import load_dotenv
 
@@ -33,6 +35,7 @@ from markdown.extensions.toc import TocExtension
 from strategy_factory.config import OUTPUT_DIR, DELIVERABLES, PROJECT_ROOT
 from strategy_factory.models import CompanyInput, ResearchMode
 from strategy_factory.progress_tracker import ProgressTracker, slugify
+from strategy_factory.refinement import RefinementEngine, StubProvider, strategy_fields
 
 load_dotenv()
 
@@ -40,6 +43,12 @@ app = Flask(__name__)
 
 # Store for active jobs and their progress
 active_jobs = {}
+
+# Input-refinement engine (consumer #1 of the reusable engine). The StubProvider
+# runs fully offline; swapping it for PerplexityGeminiProvider is the only change
+# needed to make deep dives hit live research/LLM backends.
+refine_engine = RefinementEngine(strategy_fields(), StubProvider())
+refine_sessions = {}  # rid -> {"context": {...}, "state": {key: ResolvedField}}
 
 
 # =============================================================================
@@ -663,6 +672,7 @@ BASE_TEMPLATE = """
             <a href="/"><h1>AI Strategy Factory</h1></a>
             <nav>
                 <a href="/">New Analysis</a>
+                <a href="/refine">Refine Inputs</a>
             </nav>
         </div>
     </header>
@@ -755,6 +765,149 @@ HOME_SCRIPTS = """
             this.classList.add('selected');
             this.querySelector('input').checked = true;
         });
+    });
+</script>
+"""
+
+REFINE_CONTENT = """
+<style>
+    .rf-intro { color: var(--text-secondary); margin-bottom: 1.5rem; }
+    .rf-field { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; }
+    .rf-field.stale { border-color: var(--warning); background: #fffbeb; }
+    .rf-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .rf-label { font-weight: 600; min-width: 160px; }
+    .rf-value { color: var(--text-secondary); flex: 1; min-width: 120px; }
+    .rf-badge { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+                padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+    .rf-assumed   { background: var(--border); color: var(--text-secondary); }
+    .rf-researched{ background: var(--primary-light); color: var(--primary-dark); }
+    .rf-confirmed { background: var(--success-light); color: #166534; }
+    .rf-stale-tag { background: #fef3c7; color: #92400e; }
+    .rf-panel { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+    .rf-q { margin-bottom: 0.75rem; }
+    .rf-q label { display: block; font-size: 0.9rem; margin-bottom: 0.25rem; }
+    .rf-q input { width: 100%; }
+    .rf-evidence { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; }
+    .rf-spinner { font-size: 0.85rem; color: var(--text-secondary); }
+</style>
+
+<div style="max-width: 820px; margin: 2rem auto;">
+    <div class="card">
+        <h2>Refine Inputs</h2>
+        <p class="rf-intro">
+            Every input starts as a light assumption so a run is always ready. Click
+            <strong>&#9889; Deep dive</strong> on any field to research it and answer a few
+            pre-filled questions &mdash; that promotes it to a confirmed value and flags
+            dependent fields that may need a refresh.
+        </p>
+
+        <div class="form-group">
+            <label for="rf-company">Company</label>
+            <input type="text" id="rf-company" value="{{ company }}" placeholder="e.g., Acme Robotics">
+            <small>Changing this and reloading reseeds the assumptions.</small>
+        </div>
+
+        <div id="rf-fields">
+            {% for f in fields %}
+            <div class="rf-field" data-key="{{ f.key }}">
+                <div class="rf-head">
+                    <span class="rf-label">{{ f.label }}{% if f.required %} *{% endif %}</span>
+                    <span class="rf-badge rf-{{ f.source }}">{{ f.source }}</span>
+                    <span class="rf-value">{{ f.value if f.value not in (None, '', []) else '&mdash;'|safe }}</span>
+                    {% if f.can_deepdive %}
+                    <button class="btn btn-secondary rf-deepdive" data-key="{{ f.key }}">&#9889; Deep dive</button>
+                    {% endif %}
+                </div>
+                <div class="rf-panel" style="display:none;"></div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+"""
+
+REFINE_SCRIPTS = """
+<script>
+    const RID = "{{ rid }}";
+
+    function fieldEl(key) { return document.querySelector('.rf-field[data-key=\\"' + key + '\\"]'); }
+
+    function setBadge(key, source, stale) {
+        const el = fieldEl(key);
+        if (!el) return;
+        const badge = el.querySelector('.rf-badge');
+        badge.className = 'rf-badge rf-' + source;
+        badge.textContent = source;
+        el.classList.toggle('stale', !!stale);
+        if (stale && !el.querySelector('.rf-stale-tag')) {
+            const tag = document.createElement('span');
+            tag.className = 'rf-badge rf-stale-tag';
+            tag.textContent = 'stale';
+            el.querySelector('.rf-head').insertBefore(tag, el.querySelector('.rf-value'));
+        }
+        if (!stale) { const t = el.querySelector('.rf-stale-tag'); if (t) t.remove(); }
+    }
+
+    function setValue(key, value) {
+        const el = fieldEl(key);
+        if (el) el.querySelector('.rf-value').textContent =
+            (value === null || value === '' || (Array.isArray(value) && !value.length)) ? '\\u2014' : value;
+    }
+
+    async function deepDive(key) {
+        const el = fieldEl(key);
+        const panel = el.querySelector('.rf-panel');
+        panel.style.display = 'block';
+        panel.innerHTML = '<div class=\\"rf-spinner\\">Researching &amp; drafting questions\\u2026</div>';
+
+        const res = await fetch('/refine/' + RID + '/deep-dive', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key})
+        });
+        const p = await res.json();
+        if (p.error) { panel.innerHTML = '<div class=\\"rf-spinner\\">' + p.error + '</div>'; return; }
+
+        let html = '<div class=\\"form-group\\"><label>Proposed value (confidence ' +
+            Math.round(p.confidence * 100) + '%)</label>' +
+            '<input type=\\"text\\" class=\\"rf-final\\" value=\\"' + escAttr(p.proposed_value) + '\\"></div>';
+        if (p.questions && p.questions.length) {
+            html += '<p style=\\"font-weight:600;margin:0.5rem 0;\\">Confirm the details:</p>';
+            p.questions.forEach((q, i) => {
+                html += '<div class=\\"rf-q\\"><label>' + esc(q.text) + '</label>' +
+                    '<input type=\\"text\\" value=\\"' + escAttr(q.suggested_answer) + '\\"></div>';
+            });
+        }
+        if (p.evidence && p.evidence.length) {
+            html += '<div class=\\"rf-evidence\\">Sources: ' +
+                p.evidence.map(e => '<a href=\\"' + escAttr(e) + '\\" target=\\"_blank\\">' + esc(e) + '</a>').join(', ') +
+                '</div>';
+        }
+        html += '<button class=\\"btn rf-accept\\" data-key=\\"' + key + '\\" style=\\"margin-top:0.75rem;\\">Accept</button>';
+        panel.innerHTML = html;
+        panel.querySelector('.rf-accept').addEventListener('click', () => accept(key));
+    }
+
+    async function accept(key) {
+        const el = fieldEl(key);
+        const value = el.querySelector('.rf-final').value;
+        const res = await fetch('/refine/' + RID + '/apply', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key, value})
+        });
+        const data = await res.json();
+        el.querySelector('.rf-panel').style.display = 'none';
+        data.state.forEach(rf => { setBadge(rf.key, rf.source, rf.stale); setValue(rf.key, rf.value); });
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+    function escAttr(s) { return esc(s).replace(/\\"/g, '&quot;'); }
+
+    document.querySelectorAll('.rf-deepdive').forEach(b =>
+        b.addEventListener('click', () => deepDive(b.dataset.key)));
+
+    document.getElementById('rf-company').addEventListener('change', function() {
+        const c = encodeURIComponent(this.value.trim());
+        window.location = '/refine' + (c ? ('?company=' + c) : '');
     });
 </script>
 """
@@ -957,6 +1110,82 @@ def pricing_text():
         mimetype="text/plain",
         headers={"Cache-Control": "public, max-age=3600"},
     )
+
+
+def _serialize_state(state):
+    """ResolvedField map -> JSON-friendly list in dependency order."""
+    out = []
+    for key in refine_engine.order():
+        rf = state[key]
+        d = asdict(rf)
+        out.append(d)
+    return out
+
+
+@app.route('/refine')
+def refine():
+    """Pre-run input refinement page. Light by default; deep-dive per field."""
+    company = request.args.get('company', '').strip()
+    context = {"name": company} if company else {}
+    state = refine_engine.resolve_light(context)
+    if company:
+        # Seed the user-provided name as a baseline — no staleness cascade.
+        state = refine_engine.apply_answer("name", company, state, propagate=False)
+
+    rid = str(uuid.uuid4())[:8]
+    refine_sessions[rid] = {"context": context, "state": state}
+
+    specs = {f.key: f for f in strategy_fields()}
+    fields = []
+    for key in refine_engine.order():
+        rf = state[key]
+        spec = specs[key]
+        # A field is deep-divable if it has something to research or to clarify.
+        can_deepdive = bool(spec.research_query or spec.clarify_focus)
+        fields.append({
+            "key": key, "label": spec.label, "required": spec.required,
+            "value": rf.value, "source": rf.source, "can_deepdive": can_deepdive,
+        })
+
+    from jinja2 import Template
+    content = Template(REFINE_CONTENT).render(fields=fields, company=company)
+    scripts = Template(REFINE_SCRIPTS).render(rid=rid)
+    return render_template_string(
+        BASE_TEMPLATE, title="Refine Inputs", content=content, scripts=scripts
+    )
+
+
+@app.route('/refine/<rid>/deep-dive', methods=['POST'])
+def refine_deep_dive(rid):
+    """Run the research + clarify subloop for one field; return a proposal."""
+    session = refine_sessions.get(rid)
+    if not session:
+        return jsonify({"error": "Session expired — reload the page."}), 404
+    key = (request.get_json(silent=True) or {}).get("key")
+    if key not in refine_engine.fields:
+        return jsonify({"error": "Unknown field."}), 400
+    proposal = refine_engine.deep_dive(key, session["state"], session["context"])
+    return jsonify({
+        "key": proposal.key,
+        "proposed_value": proposal.proposed_value,
+        "confidence": proposal.confidence,
+        "evidence": proposal.evidence,
+        "questions": [asdict(q) for q in proposal.questions],
+    })
+
+
+@app.route('/refine/<rid>/apply', methods=['POST'])
+def refine_apply(rid):
+    """Commit a confirmed value; dependents are marked stale by the engine."""
+    session = refine_sessions.get(rid)
+    if not session:
+        return jsonify({"error": "Session expired — reload the page."}), 404
+    body = request.get_json(silent=True) or {}
+    key = body.get("key")
+    if key not in refine_engine.fields:
+        return jsonify({"error": "Unknown field."}), 400
+    session["state"] = refine_engine.apply_answer(key, body.get("value"), session["state"])
+    return jsonify({"state": _serialize_state(session["state"])})
 
 
 @app.route('/start', methods=['POST'])

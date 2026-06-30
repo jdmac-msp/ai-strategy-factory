@@ -86,6 +86,12 @@ class ResolutionTests(unittest.TestCase):
         # name does not depend on industry.
         self.assertFalse(state["name"].stale)
 
+    def test_apply_with_propagate_false_does_not_mark_stale(self):
+        state = self.engine.resolve_light(self.context)
+        state = self.engine.apply_answer("name", "Acme", state, propagate=False)
+        self.assertEqual(state["name"].source, Source.CONFIRMED)
+        self.assertFalse(any(rf.stale for rf in state.values()))
+
     def test_determinism(self):
         a = self.engine.deep_dive("industry", self.engine.resolve_light(self.context), self.context)
         b = self.engine.deep_dive("industry", self.engine.resolve_light(self.context), self.context)

@@ -258,9 +258,13 @@ class RefinementEngine:
         value: Any,
         state: Dict[str, ResolvedField],
         confirmed: bool = True,
+        propagate: bool = True,
     ) -> Dict[str, ResolvedField]:
-        """Commit a value for ``key`` and mark every dependent field stale, since
-        their assumptions may now be out of date. Returns the updated state."""
+        """Commit a value for ``key``. When ``propagate`` is true (the default),
+        every dependent field is marked stale, since their assumptions may now be
+        out of date. Pass ``propagate=False`` when seeding an initial baseline
+        value (nothing downstream was current yet, so nothing is out of date).
+        Returns the updated state."""
         if key not in self.fields:
             raise KeyError(key)
         prior = state.get(key)
@@ -271,8 +275,9 @@ class RefinementEngine:
             confidence=0.95 if confirmed else max(0.6, prior.confidence if prior else 0.6),
             evidence=prior.evidence if prior else [],
         )
-        for dep_key in self.dependents_of(key):
-            state[dep_key] = replace(state[dep_key], stale=True)
+        if propagate:
+            for dep_key in self.dependents_of(key):
+                state[dep_key] = replace(state[dep_key], stale=True)
         return state
 
     # -- helpers ------------------------------------------------------------
