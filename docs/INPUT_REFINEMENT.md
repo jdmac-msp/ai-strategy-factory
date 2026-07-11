@@ -95,12 +95,52 @@ standalone widget.
 ## Status
 
 - [x] Headless engine: DAG ordering, light resolution, deep dive, staleness
+      (`propagate=False` on `apply_answer` for seeding a baseline without a
+      false staleness cascade — see engine.py)
 - [x] Offline stub provider + deterministic demo
-- [x] Unit tests (`python -m unittest tests.test_refinement`)
+- [x] Unit tests (`python -m unittest tests.test_refinement`, 11 passing)
 - [x] Strategy-factory field specs (consumer #1)
+- [x] Web UI: `/refine` page with provenance badges + `⚡ Deep dive` per field,
+      `/refine/<rid>/deep-dive` and `/refine/<rid>/apply` routes. Verified live
+      in Chromium (screenshots in this session's transcript). Uses
+      `StubProvider` — no live research yet.
 - [ ] Real `PerplexityGeminiProvider` wiring (parse model output → values/questions)
-- [ ] Web UI: collapsible fields with a `⚡ Deep dive` affordance + Q&A
-- [ ] Feed the resolved config into the existing pipeline (replace the 3-knob form)
+- [ ] Feed the resolved `/refine` config into the existing pipeline (`/start`
+      currently still uses the old 3-knob form; `/refine` is not yet connected
+      to it)
+- [ ] Scope → deliverable subset: make `deliverables` field actually select a
+      subset of `config.DELIVERABLES`, reusing that dict's `dependencies` to
+      pull in required upstream docs
+
+## Open loops / next session
+
+**Unanswered design question** (asked, no answer yet — resolve before building
+deliverable selection): should deliverable **Scope** be:
+(a) a few named presets ("Board readout", "Roadmap only", "Full factory"),
+(b) fully à-la-carte checkboxes, or
+(c) both (presets that expand into editable checkboxes)?
+
+**Planned next chunk** (offline-verifiable, no API keys needed — safe to do in
+any environment): in priority order —
+1. Config→run wiring: map `/refine` resolved state (`ResolvedField` dict) into
+   `CompanyInput`/a RunConfig, hand off to the existing pipeline. Currently
+   `/refine` and `/start` are two disconnected surfaces.
+2. Scope→deliverable-subset logic against `config.DELIVERABLES`, with unit
+   tests — this is what makes the Scope tier actually change pipeline output.
+   Depends on the open question above.
+3. Harden `PerplexityGeminiProvider` parsing against *mocked* Perplexity/Gemini
+   clients (deterministic fixtures, no live calls) so the shape is locked
+   before anyone plugs in real keys.
+4. A `HANDOFF.md`-style note for whoever has live API keys: what to paste in,
+   what "good" output looks like, where prompt-tuning happens
+   (`strategy_specs.py` templates + `providers.py`), what's already covered by
+   tests vs. what needs human judgment on real output quality.
+
+**What genuinely needs a human with live keys** (not deferrable to any agent
+without credentials): running `/refine` end-to-end against real Perplexity +
+Gemini and judging whether the deep-dive research, extracted values, and
+clarifying questions are actually good — that's a taste call on live model
+output that no amount of mock-based work here can substitute for.
 
 ## Roadmap notes
 
