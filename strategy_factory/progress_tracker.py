@@ -105,6 +105,7 @@ class ProgressTracker:
         # Initialize phase progress
         phases = {
             "research": PhaseProgress(name="Research"),
+            "substrate_gate": PhaseProgress(name="Substrate Gate"),
             "synthesis": PhaseProgress(name="Synthesis"),
             "generation": PhaseProgress(name="Document Generation"),
         }

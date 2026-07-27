@@ -32,6 +32,7 @@ from strategy_factory.progress_tracker import ProgressTracker, slugify
 from strategy_factory.research.orchestrator import ResearchOrchestrator
 from strategy_factory.synthesis.orchestrator import SynthesisOrchestrator
 from strategy_factory.generation.orchestrator import GenerationOrchestrator
+from strategy_factory.substrate import resolve_entity
 
 
 # Load environment variables
@@ -112,6 +113,13 @@ Examples:
             type=str,
             default="",
             help="Company industry (optional, will be detected if not provided)",
+        )
+        run_parser.add_argument(
+            "--website", "-w",
+            type=str,
+            default="",
+            help="Company website URL (canonical seed domain; enables the entity-resolution "
+                 "grounding gate between research and synthesis)",
         )
         run_parser.add_argument(
             "--dry-run",
@@ -241,6 +249,7 @@ Examples:
             context=args.context,
             mode=mode,
             industry=args.industry or None,
+            website=args.website or None,
         )
 
         # Create progress tracker
@@ -258,6 +267,11 @@ Examples:
                     print("Error: No cached research found. Remove --skip-research flag.")
                     return 1
                 print("Using cached research data.")
+
+            # Phase 1.5: Substrate Gate (entity resolution) — runs whether research was
+            # fresh or cached, so --skip-research doesn't silently bypass grounding.
+            if not self._run_substrate_gate(tracker, company_input, research_output):
+                return 1
 
             # Phase 2: Synthesis
             if not args.skip_synthesis:
@@ -333,6 +347,11 @@ Examples:
                 research_output = self._run_research(tracker, company_input, mode)
                 if not research_output:
                     return 1
+
+            # Substrate Gate (entity resolution) — short-circuits to True if this run
+            # already passed it, so resuming a past-this-point run doesn't re-block it.
+            if not self._run_substrate_gate(tracker, company_input, research_output):
+                return 1
 
             # Check if synthesis is complete
             completed_deliverables = tracker.get_completed_deliverables()
@@ -528,6 +547,76 @@ Examples:
             print()
             tracker.fail_phase("research", str(e))
             raise
+
+    def _run_substrate_gate(
+        self,
+        tracker: ProgressTracker,
+        company_input: CompanyInput,
+        research_output: ResearchOutput,
+    ) -> bool:
+        """
+        Execute the substrate entity-resolution gate between Research and Synthesis.
+
+        Blocks the pipeline if the research resolved a different entity than the one
+        seeded (e.g. a same-name-different-company collision) — this is the gate
+        substrate.py's resolve_entity() already implements and the gauntlet suite
+        already tests in isolation; this method is the wiring that makes it load-bearing.
+
+        Returns False if the run should stop (result already recorded via fail_phase).
+        """
+        # Idempotent on resume: don't re-block a run that already cleared this phase.
+        existing = tracker.state.phases.get("substrate_gate")
+        if existing and existing.status == DeliverableStatus.COMPLETED:
+            return True
+
+        print("Phase 1.5: Substrate Gate (entity resolution)")
+        print("-" * 40)
+
+        tracker.start_phase("substrate_gate")
+
+        # Gather every source URL the research actually cited. CompetitorProfile has
+        # no `sources` field on this model, so it's deliberately excluded here rather
+        # than assumed present.
+        sources: list = []
+        for section in (
+            research_output.profile,
+            research_output.industry,
+            research_output.tech_landscape,
+            research_output.regulatory,
+        ):
+            sources.extend(getattr(section, "sources", []) or [])
+
+        entity = resolve_entity(
+            seed_name=company_input.name,
+            seed_url=company_input.website or "",
+            resolved_name="",
+            resolved_description=research_output.profile.description,
+            sources=sources,
+        )
+
+        for line in entity.evidence:
+            print(f"  {line}")
+
+        if entity.blocking:
+            tracker.fail_phase(
+                "substrate_gate",
+                f"Entity resolution MISMATCH (confidence {entity.confidence}): research for "
+                f"'{company_input.name}' does not appear to be about the seeded entity. "
+                f"Seed domain '{entity.seed_domain}' was not found in any research source.",
+            )
+            print(f"\n  BLOCKED: entity resolution mismatch (confidence {entity.confidence})")
+            print(f"  Seed domain '{entity.seed_domain}' was not found in any research source.")
+            print("  This usually means the research resolved a different entity with the same "
+                  "or a similar name.")
+            print("  Provide a more specific --context, confirm --website is correct, and retry.\n")
+            return False
+
+        tracker.complete_phase(
+            "substrate_gate",
+            f"Entity resolution {entity.status.value.upper()} (confidence {entity.confidence})",
+        )
+        print(f"\n  Entity resolution: {entity.status.value.upper()} (confidence {entity.confidence})\n")
+        return True
 
     def _run_synthesis(
         self,
